@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Signal - 镜像世界</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a0a2e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 900px;
+            height: 700px;
+        }
+
+        canvas {
+            display: block;
+            background: radial-gradient(ellipse at center, #0d0d1a 0%, #050508 100%);
+            border: 4px solid #ff1493;
+            box-shadow: 
+                0 0 30px #ff1493, 
+                0 0 60px #8b00ff,
+                inset 0 0 100px rgba(139, 0, 255, 0.15);
+        }
+
+        /* CRT 扫描线效果 */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(0, 0, 0, 0.2),
+                    rgba(0, 0, 0, 0.2) 1px,
+                    transparent 1px,
+                    transparent 3px
+                );
+            animation: scanlines 6s linear infinite;
+        }
+
+        .screen-flicker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: rgba(255, 20, 147, 0.03);
+            animation: flicker 0.15s infinite;
+        }
+
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.9) 100%);
+        }
+
+        .neon-border {
+            position: absolute;
+            top: -15px;
+            left: -15px;
+            right: -15px;
+            bottom: -15px;
+            pointer-events: none;
+            border: 3px solid #ff00ff;
+            opacity: 0.4;
+            filter: blur(8px);
+            animation: pulse-border 3s ease-in-out infinite;
+        }
+
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(6px); }
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.96; }
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.02); }
+        }
+
+        .game-info {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #ff1493;
+            font-size: 18px;
+            text-shadow: 0 0 15px #ff1493, 0 0 30px #8b00ff;
+            z-index: 10;
+            font-weight: bold;
+        }
+
+        .game-info div {
+            margin: 8px 0;
+        }
+
+        .game-info span {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(5, 5, 16, 0.95);
+            z-index: 20;
+            color: #ff1493;
+            text-align: center;
+        }
+
+        .game-overlay h1 {
+            font-size: 64px;
+            text-shadow: 
+                0 0 30px #ff1493, 
+                0 0 60px #8b00ff,
+                0 0 90px #4b0082;
+            margin-bottom: 25px;
+            animation: title-pulse 2s ease-in-out infinite;
+            letter-spacing: 8px;
+        }
+
+        .game-overlay h2 {
+            font-size: 36px;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            margin-bottom: 20px;
+        }
+
+        .game-overlay p {
+            font-size: 20px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px #8b00ff;
+            line-height: 1.8;
+            color: #dda0dd;
+        }
+
+        .game-overlay .character-info {
+            margin: 20px 0;
+            padding: 15px 30px;
+            background: rgba(139, 0, 255, 0.1);
+            border: 2px solid #ff00ff;
+            border-radius: 10px;
+        }
+
+        .game-overlay .start-btn {
+            padding: 18px 50px;
+            font-size: 24px;
+            font-family: 'Courier New', monospace;
+            background: transparent;
+            border: 3px solid #ff1493;
+            color: #ff1493;
+            cursor: pointer;
+            text-shadow: 0 0 15px #ff1493;
+            box-shadow: 0 0 20px #8b00ff;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            font-weight: bold;
+            letter-spacing: 3px;
+        }
+
+        .game-overlay .start-btn:hover {
+            background: #ff1493;
+            color: #0a0a0f;
+            box-shadow: 0 0 40px #ff00ff;
+            transform: scale(1.05);
+        }
+
+        .game-overlay.hidden {
+            display: none;
+        }
+
+        @keyframes title-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.75; }
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            color: #8b00ff;
+            font-size: 14px;
+            text-shadow: 0 0 8px #8b00ff;
+        }
+
+        .boss-health {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 250px;
+            color: #ff0000;
+            font-size: 16px;
+            text-shadow: 0 0 10px #ff0000;
+            z-index: 10;
+        }
+
+        .health-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(139, 0, 0, 0.3);
+            border: 2px solid #ff0000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #ff4500);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 15px #ff0000;
+        }
+
+        .ability-bar {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .ability {
+            width: 60px;
+            height: 60px;
+            background: rgba(139, 0, 255, 0.2);
+            border: 2px solid #ff00ff;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #ff00ff;
+            font-size: 12px;
+            text-shadow: 0 0 5px #ff00ff;
+        }
+
+        .ability .key {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .ability .cooldown {
+            font-size: 10px;
+            color: #00ffff;
+        }
+
+        .ability.ready {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: #00ffff;
+            box-shadow: 0 0 15px #00ffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="900" height="700"></canvas>
+        <div class="crt-overlay"></div>
+        <div class="screen-flicker"></div>
+        <div class="vignette"></div>
+        <div class="neon-border"></div>
+        
+        <div class="game-info" id="gameInfo">
+            <div>🔮 信号源: <span id="signalCount">0</span>/8</div>
+            <div>⚡ 能量: <span id="energyCount">100</span>%</div>
+            <div>👥 小队: <span id="partyStatus">正常</span></div>
+        </div>
+
+        <div class="boss-health" id="bossHealth" style="display: none;">
+            <div>👿 Vecna - 暗影领主</div>
+            <div class="health-bar">
+                <div class="health-fill" id="healthFill" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <div class="ability-bar">
+            <div class="ability" id="ability1">
+                <div class="key">Q</div>
+                <div class="cooldown">闪现</div>
+            </div>
+            <div class="ability" id="ability2">
+                <div class="key">E</div>
+                <div class="cooldown">护盾</div>
+            </div>
+            <div class="ability" id="ability3">
+                <div class="key">SPACE</div>
+                <div class="cooldown">攻击</div>
+            </div>
+        </div>
+        
+        <div class="controls-hint">
+            移动:方向键 | 闪现:Q | 护盾:E | 攻击:空格 | 收集信号源 | 击败Vecna
+        </div>
+
+        <div class="game-overlay" id="startScreen">
+            <h1>SHADOW SIGNAL</h1>
+            <h2>镜像世界 - 霍金斯镇的噩梦</h2>
+            <p>
+                1986年，霍金斯镇再次陷入黑暗<br>
+                Eleven 失去了超能力，Mike、Dustin、Lucas 和你<br>
+                必须深入镜像世界，收集8个信号源<br>
+                击败暗影领主 Vecna，拯救小镇！
+            </p>
+            <div class="character-info">
+                <p>👧 Eleven - 精神领袖 (已失去超能力)</p>
+                <p>👦 Mike - 战术指挥</p>
+                <p>👦 Dustin - 技术专家</p>
+                <p>👦 Lucas - 勇敢战士</p>
+                <p>👤 你 - 幸存者</p>
+            </div>
+            <button class="start-btn" onclick="startGame()">开始冒险</button>
+        </div>
+
+        <div class="game-overlay hidden" id="gameOverScreen">
+            <h1 id="gameOverTitle">游戏结束</h1>
+            <p id="gameOverMessage">你被抓住了...</p>
+            <button class="start-btn" onclick="restartGame()">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const signalCountDisplay = document.getElementById('signalCount');
+        const energyCountDisplay = document.getElementById('energyCount');
+        const partyStatusDisplay = document.getElementById('partyStatus');
+        const bossHealth = document.getElementById('bossHealth');
+        const healthFill = document.getElementById('healthFill');
+        const gameOverTitle = document.getElementById('gameOverTitle');
+        const gameOverMessage = document.getElementById('gameOverMessage');
+
+        // 游戏状态
+        let gameRunning = false;
+        let signalsCollected = 0;
+        const totalSignals = 8;
+        let energy = 100;
+        let bossSpawned = false;
+        let bossHealthValue = 100;
+        let gamePhase = 'collect'; // collect, boss
+
+        // 玩家
+        const player = {
+            x: 450,
+            y: 350,
+            size: 25,
+            speed: 5,
+            color: '#00ffff',
+            glowColor: '#00ffff',
+            shieldActive: false,
+            shieldDuration: 0,
+            dashCooldown: 0,
+            attackCooldown: 0
+        };
+
+        // 队友
+        let party = [
+            { name: 'Mike', x: 420, y: 380, color: '#ff6b6b', active: true },
+            { name: 'Dustin', x: 480, y: 380, color: '#ffd93d', active: true },
+            { name: 'Lucas', x: 450, y: 330, color: '#6bcb77', active: true },
+            { name: 'Eleven', x: 450, y: 400, color: '#4ecdc4', active: true }
+        ];
+
+        // Vecna 大魔王
+        const vecna = {
+            x: 0,
+            y: 0,
+            size: 80,
+            speed: 1.5,
+            color: '#8b0000',
+            glowColor: '#ff0000',
+            health: 100,
+            attackCooldown: 0,
+            phase: 1,
+            pattern: 'chase',
+            patternTimer: 0
+        };
+
+        // 暗影怪物
+        let monsters = [];
+        let projectiles = [];
+
+        // 信号源
+        let signals = [];
+
+        // 粒子效果
+        let particles = [];
+        let ambientParticles = [];
+
+        // 按键状态
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            KeyQ: false,
+            KeyE: false,
+            Space: false
+        };
+
+        // 初始化信号源
+        function initSignals() {
+            signals = [];
+            const positions = [
+                { x: 80, y: 80 },
+                { x: 820, y: 80 },
+                { x: 80, y: 620 },
+                { x: 820, y: 620 },
+                { x: 450, y: 120 },
+                { x: 450, y: 580 },
+                { x: 150, y: 350 },
+                { x: 750, y: 350 }
+            ];
+            
+            positions.forEach((pos, index) => {
+                signals.push({
+                    x: pos.x,
+                    y: pos.y,
+                    size: 20,
+                    collected: false,
+                    pulsePhase: index * Math.PI / 3,
+                    type: index % 2 === 0 ? 'christmas' : 'demogorgon'
+                });
+            });
+        }
+
+        // 初始化环境粒子
+        function initAmbientParticles() {
+            ambientParticles = [];
+            for (let i = 0; i < 80; i++) {
+                ambientParticles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 3 + 1,
+                    speedX: (Math.random() - 0.5) * 0.8,
+                    speedY: (Math.random() - 0.5) * 0.8,
+                    opacity: Math.random() * 0.6 + 0.2,
+                    color: Math.random() > 0.5 ? '#8b00ff' : '#ff1493'
+                });
+            }
+        }
+
+        // 初始化暗影怪物
+        function initMonsters() {
+            monsters = [];
+            for (let i = 0; i < 4; i++) {
+                monsters.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: 35,
+                    speed: 1.8 + Math.random() * 0.5,
+                    color: '#2d0a2d',
+                    glowColor: '#8b008b',
+                    type: 'demogorgon',
+                    attackCooldown: 0
+                });
+            }
+        }
+
+        // 生成 Boss
+        function spawnBoss() {
+            bossSpawned = true;
+            gamePhase = 'boss';
+            vecna.x = canvas.width / 2;
+            vecna.y = 100;
+            vecna.health = 100;
+            vecna.phase = 1;
+            bossHealth.style.display = 'block';
+            
+            // 添加生成特效
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: vecna.x + (Math.random() - 0.5) * 100,
+                    y: vecna.y + (Math.random() - 0.5) * 100,
+                    size: Math.random() * 8 + 4,
+                    speedX: (Math.random() - 0.5) * 10,
+                    speedY: (Math.random() - 0.5) * 10,
+                    color: '#ff0000',
+                    life: 1.5
+                });
+            }
+        }
+
+        // 添加粒子效果
+        function addParticles(x, y, color, count = 20, speed = 6) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    size: Math.random() * 5 + 2,
+                    speedX: (Math.random() - 0.5) * speed,
+                    speedY: (Math.random() - 0.5) * speed,
+                    color: color,
+                    life: 1
+                });
+            }
+        }
+
+        // 绘制玩家
+        function drawPlayer() {
+            ctx.save();
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = player.glowColor;
+            
+            // 护盾效果
+            if (player.shieldActive) {
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.size + 15, 0, Math.PI * 2);
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+                ctx.fill();
+            }
+            
+            // 绘制玩家主体（Eleven 风格）
+            ctx.fillStyle = player.color;
+            
+            // 身体
+            ctx.beginPath();
+            ctx.ellipse(player.x, player.y + 10, player.size * 0.6, player.size * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 头部
+            ctx.beginPath();
+            ctx.arc(player.x, player.y - 8, player.size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 眼睛
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x - 6, player.y - 10, 4, 0, Math.PI * 2);
+            ctx.arc(player.x + 6, player.y - 10, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 瞳孔
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(player.x - 6, player.y - 10, 2, 0, Math.PI * 2);
+            ctx.arc(player.x + 6, player.y - 10, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        // 绘制队友
+        function drawParty() {
+            party.forEach(member => {
+                if (!member.active) return;
+                
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = member.color;
+                
+                // 身体
+                ctx.fillStyle = member.color;
+                ctx.beginPath();
+                ctx.ellipse(member.x, member.y + 8, member.size * 0.5, member.size * 0.7, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 头部
+                ctx.beginPath();
+                ctx.arc(member.x, member.y - 6, member.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 名字
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '10px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText(member.name, member.x, member.y - 25);
+                
+                ctx.restore();
+            });
+        }
+
+        // 绘制 Vecna
+        function drawVecna() {
+            if (!bossSpawned) return;
+            
+            ctx.save();
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#ff0000';
+            
+            // 身体
+            ctx.fillStyle = '#1a0000';
+            ctx.beginPath();
+            ctx.ellipse(vecna.x, vecna.y + 20, vecna.size * 0.7, vecna.size, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 头部
+            ctx.fillStyle = '#2d0a0a';
+            ctx.beginPath();
+            ctx.arc(vecna.x, vecna.y - 30, vecna.size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 触手
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + Date.now() / 500;
+                const length = 40 + Math.sin(Date.now() / 200 + i) * 10;
+                const endX = vecna.x + Math.cos(angle) * length;
+                const endY = vecna.y - 30 + Math.sin(angle) * length;
+                
+                ctx.strokeStyle = '#8b0000';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(vecna.x, vecna.y - 30);
+                ctx.quadraticCurveTo(
+                    vecna.x + Math.cos(angle) * length * 0.5,
+                    vecna.y - 30 + Math.sin(angle) * length * 0.5,
+                    endX, endY
+                );
+                ctx.stroke();
+            }
+            
+            // 眼睛（发光）
+            ctx.fillStyle = '#ff0000';
+            ctx.shadowBlur = 30;
+            ctx.beginPath();
+            ctx.arc(vecna.x - 15, vecna.y - 35, 8, 0, Math.PI * 2);
+            ctx.arc(vecna.x + 15, vecna.y - 35, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 瞳孔
+            ctx.fillStyle = '#000000';
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(vecna.x - 15, vecna.y - 35, 3, 0, Math.PI * 2);
+            ctx.arc(vecna.x + 15, vecna.y - 35, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        // 绘制暗影怪物
+        function drawMonsters() {
+            monsters.forEach(monster => {
+                ctx.save();
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = monster.glowColor;
+                
+                // 身体（恶魔风格）
+                ctx.fillStyle = monster.color;
+                ctx.beginPath();
+                const spikes = 10;
+                for (let i = 0; i < spikes * 2; i++) {
+                    const radius = i % 2 === 0 ? monster.size : monster.size * 0.5;
+                    const angle = (i * Math.PI) / spikes + Date.now() / 1000;
+                    const x = monster.x + Math.cos(angle) * radius;
+                    const y = monster.y + Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                // 嘴巴
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(monster.x, monster.y + 5, 12, 0, Math.PI);
+                ctx.fill();
+                
+                // 牙齿
+                ctx.fillStyle = '#ffffff';
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(monster.x - 10 + i * 5, monster.y + 5);
+                    ctx.lineTo(monster.x - 8 + i * 5, monster.y + 15);
+                    ctx.lineTo(monster.x - 6 + i * 5, monster.y + 5);
+                    ctx.fill();
+                }
+                
+                // 眼睛
+                ctx.fillStyle = '#ff0000';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(monster.x - 10, monster.y - 8, 5, 0, Math.PI * 2);
+                ctx.arc(monster.x + 10, monster.y - 8, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+        }
+
+        // 绘制信号源
+        function drawSignals() {
+            const time = Date.now() / 1000;
+            
+            signals.forEach(signal => {
+                if (signal.collected) return;
+                
+                const pulse = Math.sin(time * 4 + signal.pulsePhase) * 8 + 15;
+                
+                ctx.save();
+                ctx.shadowBlur = pulse;
+                
+                if (signal.type === 'christmas') {
+                    // 圣诞灯风格
+                    ctx.shadowColor = '#ff0000';
+                    ctx.strokeStyle = '#ff0000';
+                } else {
+                    // 暗影风格
+                    ctx.shadowColor = '#8b00ff';
+                    ctx.strokeStyle = '#8b00ff';
+                }
+                
+                // 外圈
+                ctx.beginPath();
+                ctx.arc(signal.x, signal.y, signal.size + pulse * 0.4, 0, Math.PI * 2);
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // 内圈
+                ctx.beginPath();
+                ctx.arc(signal.x, signal.y, signal.size * 0.7, 0, Math.PI * 2);
+                ctx.fillStyle = signal.type === 'christmas' ? '#ff0000' : '#8b00ff';
+                ctx.fill();
+                
+                // 核心
+                ctx.beginPath();
+                ctx.arc(signal.x, signal.y, signal.size * 0.35, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                
+                // 光芒
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2 + time;
+                    const startR = signal.size * 0.5;
+                    const endR = signal.size + pulse * 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(
+                        signal.x + Math.cos(angle) * startR,
+                        signal.y + Math.sin(angle) * startR
+                    );
+                    ctx.lineTo(
+                        signal.x + Math.cos(angle) * endR,
+                        signal.y + Math.sin(angle) * endR
+                    );
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            });
+        }
+
+        // 绘制投射物
+        function drawProjectiles() {
+            projectiles.forEach(proj => {
+                ctx.save();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = proj.color;
+                
+                ctx.fillStyle = proj.color;
+                ctx.beginPath();
+                ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+        }
+
+        // 绘制粒子
+        function drawParticles() {
+            particles.forEach((particle, index) => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.life -= 0.025;
+                
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                    return;
+                }
+                
+                ctx.save();
+                ctx.globalAlpha = particle.life;
+                ctx.fillStyle = particle.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = particle.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size * particle.life, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // 绘制环境粒子
+        function drawAmbientParticles() {
+            ambientParticles.forEach(p => {
+                p.x += p.speedX;
+                p.y += p.speedY;
+                
+                if (p.x < 0) p.x = canvas.width;
+                if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height;
+                if (p.y > canvas.height) p.y = 0;
+                
+                ctx.save();
+                ctx.globalAlpha = p.opacity;
+                ctx.fillStyle = p.color;
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // 绘制地面
+        function drawGround() {
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 网格线
+            ctx.strokeStyle = 'rgba(139, 0, 255, 0.08)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x < canvas.width; x += 40) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < canvas.height; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 随机暗影区域
+            ctx.fillStyle = 'rgba(75, 0, 130, 0.1)';
+            for (let i = 0; i < 5; i++) {
+                const x = (i * 200 + Date.now() / 50) % (canvas.width + 200) - 100;
+                const y = 100 + i * 120;
+                ctx.beginPath();
+                ctx.ellipse(x, y, 80, 40, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 更新玩家
+        function updatePlayer() {
+            if (keys.ArrowUp && player.y > player.size) {
+                player.y -= player.speed;
+            }
+            if (keys.ArrowDown && player.y < canvas.height - player.size) {
+                player.y += player.speed;
+            }
+            if (keys.ArrowLeft && player.x > player.size) {
+                player.x -= player.speed;
+            }
+            if (keys.ArrowRight && player.x < canvas.width - player.size) {
+                player.x += player.speed;
+            }
+            
+            // 更新护盾
+            if (player.shieldActive) {
+                player.shieldDuration--;
+                if (player.shieldDuration <= 0) {
+                    player.shieldActive = false;
+                }
+            }
+            
+            // 更新冷却
+            if (player.dashCooldown > 0) player.dashCooldown--;
+            if (player.attackCooldown > 0) player.attackCooldown--;
+            
+            // 更新能力显示
+            updateAbilityDisplay();
+        }
+
+        // 更新能力显示
+        function updateAbilityDisplay() {
+            const ability1 = document.getElementById('ability1');
+            const ability2 = document.getElementById('ability2');
+            const ability3 = document.getElementById('ability3');
+            
+            ability1.classList.toggle('ready', player.dashCooldown === 0);
+            ability2.classList.toggle('ready', !player.shieldActive && player.attackCooldown < 30);
+            ability3.classList.toggle('ready', player.attackCooldown === 0);
+        }
+
+        // 使用闪现
+        function useDash() {
+            if (player.dashCooldown > 0 || energy < 15) return;
+            
+            energy -= 15;
+            player.dashCooldown = 60;
+            
+            const dashDistance = 100;
+            if (keys.ArrowUp) player.y -= dashDistance;
+            if (keys.ArrowDown) player.y += dashDistance;
+            if (keys.ArrowLeft) player.x -= dashDistance;
+            if (keys.ArrowRight) player.x += dashDistance;
+            
+            // 边界检查
+            player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+            
+            addParticles(player.x, player.y, '#00ffff', 30, 8);
+        }
+
+        // 使用护盾
+        function useShield() {
+            if (player.shieldActive || energy < 10) return;
+            
+            energy -= 10;
+            player.shieldActive = true;
+            player.shieldDuration = 180;
+            
+            addParticles(player.x, player.y, '#00ffff', 25);
+        }
+
+        // 攻击
+        function useAttack() {
+            if (player.attackCooldown > 0 || energy < 5) return;
+            
+            energy -= 5;
+            player.attackCooldown = 20;
+            
+            // 发射投射物
+            const directions = [
+                { dx: 0, dy: -1 },
+                { dx: 0, dy: 1 },
+                { dx: -1, dy: 0 },
+                { dx: 1, dy: 0 }
+            ];
+            
+            directions.forEach(dir => {
+                projectiles.push({
+                    x: player.x,
+                    y: player.y,
+                    speedX: dir.dx * 8,
+                    speedY: dir.dy * 8,
+                    size: 8,
+                    color: '#00ffff',
+                    damage: 10
+                });
+            });
+            
+            addParticles(player.x, player.y, '#00ffff', 15);
+        }
+
+        // 更新队友
+        function updateParty() {
+            party.forEach(member => {
+                if (!member.active) return;
+                
+                // 简单的跟随行为
+                const dx = player.x - member.x;
+                const dy = player.y - member.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 80) {
+                    member.x += (dx / distance) * 2;
+                    member.y += (dy / distance) * 2;
+                }
+            });
+        }
+
+        // 更新怪物
+        function updateMonsters() {
+            monsters.forEach(monster => {
+                const dx = player.x - monster.x;
+                const dy = player.y - monster.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    monster.x += (dx / distance) * monster.speed;
+                    monster.y += (dy / distance) * monster.speed;
+                }
+                
+                // 碰撞检测
+                if (distance < player.size + monster.size * 0.6) {
+                    if (player.shieldActive) {
+                        // 护盾反射
+                        monster.x -= (dx / distance) * 50;
+                        monster.y -= (dy / distance) * 50;
+                        addParticles(monster.x, monster.y, '#00ffff', 20);
+                    } else {
+                        gameOver(false);
+                    }
+                }
+            });
+        }
+
+        // 更新 Vecna
+        function updateVecna() {
+            if (!bossSpawned) return;
+            
+            vecna.patternTimer++;
+            
+            // 模式切换
+            if (vecna.patternTimer > 180) {
+                vecna.patternTimer = 0;
+                vecna.pattern = ['chase', 'teleport', 'summon', 'attack'][Math.floor(Math.random() * 4)];
+            }
+            
+            switch (vecna.pattern) {
+                case 'chase':
+                    const dx = player.x - vecna.x;
+                    const dy = player.y - vecna.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 0) {
+                        vecna.x += (dx / distance) * vecna.speed;
+                        vecna.y += (dy / distance) * vecna.speed;
+                    }
+                    break;
+                    
+                case 'teleport':
+                    if (vecna.patternTimer === 30) {
+                        vecna.x = Math.random() * (canvas.width - 200) + 100;
+                        vecna.y = Math.random() * (canvas.height - 200) + 100;
+                        addParticles(vecna.x, vecna.y, '#ff0000', 40);
+                    }
+                    break;
+                    
+                case 'summon':
+                    if (vecna.patternTimer === 60 && monsters.length < 8) {
+                        monsters.push({
+                            x: vecna.x + (Math.random() - 0.5) * 100,
+                            y: vecna.y + (Math.random() - 0.5) * 100,
+                            size: 30,
+                            speed: 2,
+                            color: '#4a0a4a',
+                            glowColor: '#ff00ff',
+                            type: 'demodog',
+                            attackCooldown: 0
+                        });
+                        addParticles(vecna.x, vecna.y, '#8b00ff', 30);
+                    }
+                    break;
+                    
+                case 'attack':
+                    if (vecna.patternTimer === 60) {
+                        for (let i = 0; i < 8; i++) {
+                            const angle = (i / 8) * Math.PI * 2;
+                            projectiles.push({
+                                x: vecna.x,
+                                y: vecna.y,
+                                speedX: Math.cos(angle) * 6,
+                                speedY: Math.sin(angle) * 6,
+                                size: 12,
+                                color: '#ff0000',
+                                isEnemy: true,
+                                damage: 20
+                            });
+                        }
+                        addParticles(vecna.x, vecna.y, '#ff0000', 40);
+                    }
+                    break;
+            }
+            
+            // 碰撞检测
+            const pdx = player.x - vecna.x;
+            const pdy = player.y - vecna.y;
+            const pDistance = Math.sqrt(pdx * pdx + pdy * pdy);
+            
+            if (pDistance < player.size + vecna.size * 0.7) {
+                if (player.shieldActive) {
+                    vecna.health -= 5;
+                    addParticles(vecna.x, vecna.y, '#00ffff', 25);
+                    player.shieldActive = false;
+                } else {
+                    gameOver(false);
+                }
+            }
+            
+            // 更新血量显示
+            healthFill.style.width = vecna.health + '%';
+        }
+
+        // 更新投射物
+        function updateProjectiles() {
+            projectiles.forEach((proj, index) => {
+                proj.x += proj.speedX;
+                proj.y += proj.speedY;
+                
+                // 移除出界的投射物
+                if (proj.x < 0 || proj.x > canvas.width || proj.y < 0 || proj.y > canvas.height) {
+                    projectiles.splice(index, 1);
+                    return;
+                }
+                
+                if (proj.isEnemy) {
+                    // 敌方投射物检测玩家
+                    const dx = player.x - proj.x;
+                    const dy = player.y - proj.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < player.size + proj.size) {
+                        if (player.shieldActive) {
+                            player.shieldActive = false;
+                            addParticles(proj.x, proj.y, '#00ffff', 20);
+                        } else {
+                            gameOver(false);
+                        }
+                        projectiles.splice(index, 1);
+                        return;
+                    }
+                } else {
+                    // 玩家投射物检测敌人
+                    monsters.forEach((monster, mIndex) => {
+                        const mdx = monster.x - proj.x;
+                        const mdy = monster.y - proj.y;
+                        const mDistance = Math.sqrt(mdx * mdx + mdy * mdy);
+                        
+                        if (mDistance < monster.size + proj.size) {
+                            addParticles(monster.x, monster.y, '#8b00ff', 20);
+                            monsters.splice(mIndex, 1);
+                            projectiles.splice(index, 1);
+                            return;
+                        }
+                    });
+                    
+                    // 检测 Boss
+                    if (bossSpawned) {
+                        const bdx = vecna.x - proj.x;
+                        const bdy = vecna.y - proj.y;
+                        const bDistance = Math.sqrt(bdx * bdx + bdy * bdy);
+                        
+                        if (bDistance < vecna.size + proj.size) {
+                            vecna.health -= proj.damage;
+                            addParticles(vecna.x, vecna.y, '#ff0000', 20);
+                            projectiles.splice(index, 1);
+                            
+                            if (vecna.health <= 0) {
+                                gameOver(true);
+                            }
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+
+        // 检测信号源收集
+        function checkSignalCollection() {
+            signals.forEach(signal => {
+                if (signal.collected) return;
+                
+                const dx = player.x - signal.x;
+                const dy = player.y - signal.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.size + signal.size) {
+                    signal.collected = true;
+                    signalsCollected++;
+                    signalCountDisplay.textContent = signalsCollected;
+                    energy = Math.min(100, energy + 10);
+                    energyCountDisplay.textContent = Math.round(energy);
+                    addParticles(signal.x, signal.y, signal.type === 'christmas' ? '#ff0000' : '#8b00ff', 40);
+                    
+                    // 收集到一半时随机队友受伤
+                    if (signalsCollected === 4) {
+                        const activeMembers = party.filter(m => m.active);
+                        if (activeMembers.length > 0) {
+                            const victim = activeMembers[Math.floor(Math.random() * activeMembers.length)];
+                            victim.active = false;
+                            addParticles(victim.x, victim.y, '#ff0000', 30);
+                            updatePartyStatus();
+                        }
+                    }
+                    
+                    // 收集完所有信号源
+                    if (signalsCollected >= totalSignals) {
+                        spawnBoss();
+                    }
+                }
+            });
+        }
+
+        // 更新队伍状态
+        function updatePartyStatus() {
+            const activeCount = party.filter(m => m.active).length;
+            let status = '';
+            switch (activeCount) {
+                case 4: status = '全员正常'; break;
+                case 3: status = '1人受伤'; break;
+                case 2: status = '2人受伤'; break;
+                case 1: status = '仅剩1人'; break;
+                case 0: status = '全员阵亡'; break;
+            }
+            partyStatusDisplay.textContent = status;
+            
+            if (activeCount === 0) {
+                gameOver(false);
+            }
+        }
+
+        // 能量恢复
+        function recoverEnergy() {
+            if (energy < 100) {
+                energy += 0.05;
+                energyCountDisplay.textContent = Math.round(energy);
+            }
+        }
+
+        // 游戏结束
+        function gameOver(won) {
+            gameRunning = false;
+            
+            if (won) {
+                gameOverTitle.textContent = '🎉 胜利！';
+                gameOverTitle.style.color = '#00ffff';
+                gameOverMessage.innerHTML = 
+                    '你击败了 Vecna！<br>' +
+                    '霍金斯镇恢复了平静<br>' +
+                    '小队成功拯救了小镇！';
+            } else {
+                gameOverTitle.textContent = '💀 游戏结束';
+                gameOverTitle.style.color = '#ff0000';
+                const activeCount = party.filter(m => m.active).length;
+                gameOverMessage.innerHTML = 
+                    `你被抓住了...<br>` +
+                    `收集信号源: ${signalsCollected}/${totalSignals}<br>` +
+                    `存活队友: ${activeCount}/4`;
+            }
+            
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // 主游戏循环
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // 更新
+            updatePlayer();
+            updateParty();
+            updateMonsters();
+            updateVecna();
+            updateProjectiles();
+            checkSignalCollection();
+            recoverEnergy();
+            
+            // 绘制
+            drawGround();
+            drawAmbientParticles();
+            drawSignals();
+            drawParty();
+            drawPlayer();
+            drawMonsters();
+            drawVecna();
+            drawProjectiles();
+            drawParticles();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 开始游戏
+        function startGame() {
+            gameRunning = true;
+            signalsCollected = 0;
+            energy = 100;
+            bossSpawned = false;
+            gamePhase = 'collect';
+            
+            signalCountDisplay.textContent = signalsCollected;
+            energyCountDisplay.textContent = Math.round(energy);
+            partyStatusDisplay.textContent = '全员正常';
+            bossHealth.style.display = 'none';
+            
+            // 重置位置
+            player.x = 450;
+            player.y = 350;
+            player.shieldActive = false;
+            player.dashCooldown = 0;
+            player.attackCooldown = 0;
+            
+            party.forEach((member, index) => {
+                member.active = true;
+                member.x = 450 + (index % 3 - 1) * 40;
+                member.y = 380 + (index > 2 ? 40 : 0);
+            });
+            
+            initSignals();
+            initMonsters();
+            initAmbientParticles();
+            particles = [];
+            projectiles = [];
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            gameLoop();
+        }
+
+        // 重新开始
+        function restartGame() {
+            startGame();
+        }
+
+        // 键盘事件监听
+        document.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                e.preventDefault();
+                keys[e.code] = true;
+                
+                if (e.code === 'KeyQ') useDash();
+                if (e.code === 'KeyE') useShield();
+                if (e.code === 'Space') useAttack();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = false;
+            }
+        });
+
+        // 初始化
+        initAmbientParticles();
+        drawGround();
+        drawAmbientParticles();
+    </script>
+</body>
+</html>
